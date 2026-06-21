@@ -1,0 +1,100 @@
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class Source:
+    name: str
+    url: str
+    category: str           # FEDERAL, PROVINCIAL, SPECIAL
+    province_code: Optional[str] = None
+
+
+SOURCES = [
+    # ── FEDERAL ────────────────────────────────────────────────────────────
+    Source("IRCC Notices & Announcements",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/news/notices.html",
+           "FEDERAL"),
+    Source("IRCC Latest News",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/news.html",
+           "FEDERAL"),
+    Source("Express Entry – Rounds of Invitations",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/rounds-invitations.html",
+           "FEDERAL"),
+    Source("IRCC Application Processing Times",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/services/application/check-processing-times.html",
+           "FEDERAL"),
+    Source("IRCC Operational Instructions & Guidelines",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements.html",
+           "FEDERAL"),
+    Source("Temporary Foreign Worker Program – Updates",
+           "https://www.canada.ca/en/employment-social-development/services/foreign-workers.html",
+           "FEDERAL"),
+    Source("International Mobility Program",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/services/work-canada/permit/temporary/work-permit.html",
+           "FEDERAL"),
+    Source("Family Sponsorship Program",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/family-sponsorship.html",
+           "FEDERAL"),
+    Source("Study Permit – Requirements & Updates",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit.html",
+           "FEDERAL"),
+    Source("Citizenship – Policy & Requirements",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/services/canadian-citizenship.html",
+           "FEDERAL"),
+
+    # ── PROVINCIAL ─────────────────────────────────────────────────────────
+    Source("Ontario – OINP",
+           "https://www.ontario.ca/page/ontario-immigrant-nominee-program-oinp",
+           "PROVINCIAL", "ON"),
+    Source("British Columbia – BC PNP",
+           "https://www.welcomebc.ca/immigrate-to-b-c/bc-provincial-nominee-program",
+           "PROVINCIAL", "BC"),
+    Source("Alberta – AAIP",
+           "https://www.alberta.ca/alberta-advantage-immigration-program.aspx",
+           "PROVINCIAL", "AB"),
+    Source("Saskatchewan – SINP",
+           "https://www.saskatchewan.ca/residents/moving-to-saskatchewan/live-in-saskatchewan/by-immigrating/saskatchewan-immigrant-nominee-program",
+           "PROVINCIAL", "SK"),
+    Source("Manitoba – MPNP",
+           "https://immigratemanitoba.com/immigrate-to-manitoba/",
+           "PROVINCIAL", "MB"),
+    Source("Nova Scotia – NSNP",
+           "https://novascotiaimmigration.com/move-here/",
+           "PROVINCIAL", "NS"),
+    Source("New Brunswick – PNP",
+           "https://www.welcomenb.ca/content/wel-bien/en/immigrating/content/how_to_immigrate/NB_Provincial_Nominee_Program.html",
+           "PROVINCIAL", "NB"),
+    Source("Prince Edward Island – PNP",
+           "https://www.princeedwardisland.ca/en/topic/pei-pnp",
+           "PROVINCIAL", "PE"),
+    Source("Newfoundland & Labrador – PNP",
+           "https://www.gov.nl.ca/immigration/",
+           "PROVINCIAL", "NL"),
+    Source("Northwest Territories – NTNP",
+           "https://www.immigratenwt.ca/en/ntnp-streams",
+           "PROVINCIAL", "NT"),
+    Source("Yukon – Nominee Program",
+           "https://yukon.ca/en/immigrating-yukon",
+           "PROVINCIAL", "YT"),
+    Source("Quebec – Immigration Programs",
+           "https://www.immigration-quebec.gouv.qc.ca/en/immigrate-settle/index.html",
+           "PROVINCIAL", "QC"),
+
+    # ── SPECIAL PROGRAMS ───────────────────────────────────────────────────
+    Source("Atlantic Immigration Program",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/atlantic-immigration.html",
+           "SPECIAL"),
+    Source("Rural & Northern Immigration Pilot",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/rural-northern-immigration-pilot.html",
+           "SPECIAL"),
+    Source("Agri-Food Pilot",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/agri-food-pilot.html",
+           "SPECIAL"),
+    Source("Start-Up Visa Program",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/start-visa.html",
+           "SPECIAL"),
+    Source("Home Child Care & Home Support Worker Pilots",
+           "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/caregivers/child-care-home-support-worker.html",
+           "SPECIAL"),
+]

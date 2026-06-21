@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: freight-broker-bot
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./screenshots:/app/screenshots
+      - ./logs:/app/logs
+    networks:
+      - freight-net
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: freight-dashboard
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - freight-net
+
+  imm-alert-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.immigration
+    container_name: imm-alert-bot
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - freight-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: freight-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-freight_bot}
+      POSTGRES_USER: ${POSTGRES_USER:-freight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-freight}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - freight-net
+
+volumes:
+  postgres_data:
+
+networks:
+  freight-net:
+    driver: bridge
