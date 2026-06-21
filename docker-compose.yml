@@ -45,6 +45,32 @@ services:
     networks:
       - freight-net
 
+  listing-sniper:
+    build:
+      context: .
+      dockerfile: Dockerfile.listing_sniper
+    container_name: listing-sniper
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - freight-net
+
+  opportunities:
+    build:
+      context: .
+      dockerfile: Dockerfile.opportunities
+    container_name: opportunities-bot
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - freight-net
+
   postgres:
     image: postgres:16-alpine
     container_name: freight-postgres
