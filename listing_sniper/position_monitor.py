@@ -12,7 +12,7 @@ from listing_sniper.seller import get_current_value_usdc, sell_token_for_usdc
 logger = logging.getLogger(__name__)
 
 TARGET_MULTIPLIER = 1.30   # sell at +30%
-STOP_MULTIPLIER = 0.85     # cut at -15%
+STOP_MULTIPLIER = 0.90     # cut at -10%
 CHECK_INTERVAL = 300        # check open positions every 5 minutes
 MAX_HOLD_HOURS = 72         # force-sell after 3 days regardless
 
@@ -58,7 +58,7 @@ async def check_and_close(position: Position, session: Session, bot: Bot):
 
     reason = (
         "🎯 TARGET HIT (+30%)" if current >= target
-        else "⛔ STOP LOSS (-15%)" if current <= stop
+        else "⛔ STOP LOSS (-10%)" if current <= stop
         else f"⏰ MAX HOLD REACHED ({age_hours:.0f}h)"
     )
 

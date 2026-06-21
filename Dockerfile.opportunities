@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r opportunities_requirements.txt
 
 COPY price_glitch/ ./price_glitch/
 COPY classaction/ ./classaction/
+COPY odds_arb/ ./odds_arb/
 COPY opportunities_main.py .
 
 CMD ["python", "-u", "opportunities_main.py"]
