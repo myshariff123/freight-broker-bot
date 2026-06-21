@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import httpx
 
@@ -10,6 +11,7 @@ PLATFORM = "polygon-pos"
 async def find_polygon_address(symbol: str, client: httpx.AsyncClient) -> str | None:
     """Return Polygon contract address for symbol via CoinGecko free API."""
     try:
+        await asyncio.sleep(3)  # CoinGecko free tier: ~10-30 req/min
         resp = await client.get(f"{BASE}/search", params={"query": symbol}, timeout=15)
         resp.raise_for_status()
         coins = [c for c in resp.json().get("coins", []) if c.get("symbol", "").upper() == symbol.upper()]
@@ -17,6 +19,7 @@ async def find_polygon_address(symbol: str, client: httpx.AsyncClient) -> str | 
             return None
 
         for coin in coins[:3]:
+            await asyncio.sleep(2)
             detail = await client.get(
                 f"{BASE}/coins/{coin['id']}",
                 params={"localization": "false", "tickers": "false", "community_data": "false", "sparkline": "false"},

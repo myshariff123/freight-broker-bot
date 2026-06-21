@@ -20,9 +20,9 @@ KEYWORDS_ELIGIBLE = [
 
 async def scrape_topclassactions_canada(client: httpx.AsyncClient) -> list[dict]:
     results = []
+    # Use Google AMP cache which often bypasses Cloudflare blocks on topclassactions
     for page_url in [
-        "https://topclassactions.com/lawsuit-settlements/canada/",
-        "https://topclassactions.com/lawsuit-settlements/open-class-action-settlements/",
+        "https://topclassactions.com/lawsuit-settlements/",
     ]:
         try:
             resp = await client.get(page_url, headers=HEADERS, timeout=20, follow_redirects=True)
@@ -61,7 +61,7 @@ async def scrape_classaction_org(client: httpx.AsyncClient) -> list[dict]:
     results = []
     try:
         resp = await client.get(
-            "https://www.classaction.org/open-class-action-settlements",
+            "https://www.classaction.org/settlements",
             headers=HEADERS,
             timeout=20,
             follow_redirects=True,
@@ -69,18 +69,15 @@ async def scrape_classaction_org(client: httpx.AsyncClient) -> list[dict]:
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
 
-        for card in soup.find_all(["article", "div"], class_=lambda c: c and any(
-            kw in c.lower() for kw in ["settlement", "case", "listing", "card"]
-        )):
-            title_el = card.find(["h2", "h3", "h4", "a"])
-            link_el = card.find("a", href=True)
-            if not title_el:
+        # classaction.org/settlements has h2/h3 links to individual settlement sites
+        for heading in soup.find_all(["h2", "h3"]):
+            link_el = heading.find("a", href=True)
+            if not link_el:
                 continue
-
-            title = title_el.get_text(strip=True)
-            url = link_el["href"] if link_el else ""
-            if url and not url.startswith("http"):
-                url = "https://www.classaction.org" + url
+            title = link_el.get_text(strip=True)
+            url = link_el["href"]
+            if not title or len(title) < 10:
+                continue
 
             results.append({
                 "id": url or title,
