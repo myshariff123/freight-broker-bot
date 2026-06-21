@@ -15,7 +15,8 @@ from listing_sniper.exchanges import (
     extract_base_token, get_bybit_pairs, get_coinbase_pairs,
     get_kraken_pairs, get_okx_pairs, is_interesting,
 )
-from listing_sniper.models import Base, KnownPair
+from listing_sniper.models import Base, KnownPair, Position
+from listing_sniper.position_monitor import monitor_positions
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -37,48 +38,38 @@ async def alert(bot: Bot, msg: str):
 
 
 def is_seeded(session) -> bool:
-    """Return True if the database already has baseline pairs loaded."""
-    count = session.query(func.count(KnownPair.pair)).scalar()
-    return count > 100  # if we have > 100 pairs, we've already seeded
+    return session.query(func.count(KnownPair.pair)).scalar() > 100
 
 
 async def seed_baseline(session, client: httpx.AsyncClient):
-    """
-    First-run: pull ALL current pairs from every exchange and store them silently.
-    No alerts fired. This establishes the baseline so future NEW pairs trigger alerts.
-    """
     total = 0
     for exchange_name, poller in POLLERS.items():
         try:
             pairs = await poller(client)
             for pair in pairs:
                 if not session.get(KnownPair, (exchange_name, pair)):
-                    base = extract_base_token(pair)
                     session.add(KnownPair(
-                        exchange=exchange_name,
-                        pair=pair,
-                        base_token=base,
-                        first_seen=datetime.now(timezone.utc),
-                        acted=False,
+                        exchange=exchange_name, pair=pair,
+                        base_token=extract_base_token(pair),
+                        first_seen=datetime.now(timezone.utc), acted=False,
                     ))
                     total += 1
             session.commit()
             logger.info(f"Seeded {exchange_name}: {len(pairs)} pairs")
         except Exception as e:
             logger.warning(f"Seed failed [{exchange_name}]: {e}")
-    logger.info(f"Baseline complete — {total} pairs stored silently. Now monitoring for genuinely NEW listings only.")
+    logger.info(f"Baseline complete — {total} pairs stored silently.")
     return total
 
 
-async def handle_new_listing(exchange: str, pair: str, base: str, session, bot: Bot, client: httpx.AsyncClient):
+async def handle_new_listing(exchange: str, pair: str, base: str, session, bot: Bot, client: httpx.AsyncClient, session_factory):
     logger.info(f"GENUINE NEW LISTING — {exchange.upper()}: {pair} ({base})")
 
     poly_addr = await find_polygon_address(base, client)
 
     record = KnownPair(
         exchange=exchange, pair=pair, base_token=base,
-        first_seen=datetime.now(timezone.utc),
-        polygon_addr=poly_addr, acted=False,
+        first_seen=datetime.now(timezone.utc), polygon_addr=poly_addr, acted=False,
     )
     session.add(record)
     session.commit()
@@ -87,14 +78,14 @@ async def handle_new_listing(exchange: str, pair: str, base: str, session, bot: 
         await alert(bot,
             f"📋 <b>NEW LISTING — {exchange.upper()}</b>\n"
             f"Pair: <b>{pair}</b>\n"
-            f"Token <b>{base}</b> not found on Polygon — no auto-buy."
+            f"Token <b>{base}</b> not on Polygon — no auto-buy.\n"
+            f"Monitor manually if interested."
         )
         return
 
     await alert(bot,
         f"🚨 <b>NEW CEX LISTING — {exchange.upper()}</b>\n"
         f"Pair: <b>{pair}</b> | Token: <b>{base}</b>\n"
-        f"Polygon: <code>{poly_addr}</code>\n"
         f"Executing ${BUY_AMOUNT_USD:.0f} USDC buy on Uniswap V3..."
     )
 
@@ -104,18 +95,71 @@ async def handle_new_listing(exchange: str, pair: str, base: str, session, bot: 
     session.commit()
 
     if tx:
+        # Record open position for auto-sell monitor
+        pos_session = session_factory()
+        try:
+            position = Position(
+                token_address=poly_addr,
+                token_symbol=base,
+                exchange=exchange,
+                pair=pair,
+                buy_usdc=BUY_AMOUNT_USD,
+                buy_tx=tx,
+                status="open",
+            )
+            pos_session.add(position)
+            pos_session.commit()
+        finally:
+            pos_session.close()
+
         await alert(bot,
             f"✅ <b>BUY EXECUTED</b> — {base}\n"
-            f"Amount: ${BUY_AMOUNT_USD:.0f} USDC\n"
-            f"Tx: <code>{tx}</code>\n"
-            f"🎯 Target: +30% | Cut loss: -15%"
+            f"Spent: ${BUY_AMOUNT_USD:.0f} USDC\n"
+            f"Tx: <code>{tx}</code>\n\n"
+            f"🤖 Auto-sell armed:\n"
+            f"  • Sell at: +30% (${BUY_AMOUNT_USD * 1.30:.0f})\n"
+            f"  • Stop loss: -15% (${BUY_AMOUNT_USD * 0.85:.0f})\n"
+            f"  • Max hold: 72 hours\n"
+            f"Checking every 5 minutes."
         )
     else:
         await alert(bot,
             f"⚠️ <b>AUTO-BUY FAILED</b> — {base}\n"
-            f"Reason: no USDC in wallet or pool too thin.\n"
-            f"Consider manual buy: {pair} now listed on {exchange.upper()}"
+            f"No USDC in wallet or pool too thin.\n"
+            f"If you want to buy manually: <code>{poly_addr}</code> on Uniswap V3 Polygon."
         )
+
+
+async def scan_exchanges(session_factory, bot: Bot, client: httpx.AsyncClient):
+    while True:
+        session = session_factory()
+        try:
+            for exchange_name, poller in POLLERS.items():
+                try:
+                    current_pairs = await poller(client)
+                except Exception as e:
+                    logger.warning(f"Poll failed [{exchange_name}]: {e}")
+                    continue
+
+                for pair in current_pairs:
+                    if session.get(KnownPair, (exchange_name, pair)):
+                        continue
+
+                    base = extract_base_token(pair)
+                    if not is_interesting(base):
+                        session.add(KnownPair(exchange=exchange_name, pair=pair, base_token=base, acted=False))
+                        session.commit()
+                        continue
+
+                    await handle_new_listing(exchange_name, pair, base, session, bot, client, session_factory)
+                    await asyncio.sleep(3)
+
+        except Exception as e:
+            logger.error(f"Scan error: {e}")
+        finally:
+            session.close()
+
+        await asyncio.sleep(POLL_INTERVAL)
 
 
 async def run():
@@ -128,48 +172,25 @@ async def run():
         session = Session()
         try:
             if not is_seeded(session):
-                logger.info("First run detected — building silent baseline (no alerts will fire during this step)...")
-                await alert(bot, "🔍 <b>Listing Sniper:</b> Building baseline of all existing exchange pairs. No alerts until complete.")
+                logger.info("First run — building silent baseline...")
+                await alert(bot, "🔍 <b>Listing Sniper:</b> Building baseline. No alerts until complete.")
                 count = await seed_baseline(session, client)
-                await alert(bot, f"✅ <b>Listing Sniper ACTIVE</b>\nBaseline: <b>{count:,} pairs</b> stored across Coinbase, Kraken, Bybit, OKX.\nMonitoring every 60s — you will only hear from me when a <b>genuinely new token lists</b>.")
+                await alert(bot,
+                    f"✅ <b>Listing Sniper ACTIVE</b>\n"
+                    f"Baseline: <b>{count:,} pairs</b> across 4 exchanges.\n"
+                    f"You will only hear from me when a genuinely new token lists.\n"
+                    f"Auto-sell armed at +30% / -15% stop."
+                )
             else:
-                logger.info("Database already seeded — skipping baseline, monitoring for new listings only.")
+                logger.info("Already seeded — monitoring for new listings only.")
         finally:
             session.close()
 
-        logger.info("CEX Listing Sniper active — 60s polling, alerts only on genuinely new pairs")
-
-        while True:
-            session = Session()
-            try:
-                for exchange_name, poller in POLLERS.items():
-                    try:
-                        current_pairs = await poller(client)
-                    except Exception as e:
-                        logger.warning(f"Poll failed [{exchange_name}]: {e}")
-                        continue
-
-                    for pair in current_pairs:
-                        if session.get(KnownPair, (exchange_name, pair)):
-                            continue
-
-                        # This pair did NOT exist when we seeded — it is a real new listing
-                        base = extract_base_token(pair)
-                        if not is_interesting(base):
-                            # Still record it to avoid re-checking, but no alert
-                            session.add(KnownPair(exchange=exchange_name, pair=pair, base_token=base, acted=False))
-                            session.commit()
-                            continue
-
-                        await handle_new_listing(exchange_name, pair, base, session, bot, client)
-                        await asyncio.sleep(3)
-
-            except Exception as e:
-                logger.error(f"Main loop error: {e}")
-            finally:
-                session.close()
-
-            await asyncio.sleep(POLL_INTERVAL)
+    async with httpx.AsyncClient() as client:
+        await asyncio.gather(
+            scan_exchanges(Session, bot, client),
+            monitor_positions(Session, bot),
+        )
 
 
 if __name__ == "__main__":

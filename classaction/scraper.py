@@ -9,12 +9,18 @@ HEADERS = {
     "Accept-Language": "en-CA,en;q=0.9",
 }
 
-KEYWORDS_ELIGIBLE = [
+# STRICT Canada-only filter — must explicitly mention Canada or a Canadian entity.
+# Do NOT add generic US company names (Facebook, Amazon, etc.) — those are US settlements.
+KEYWORDS_CANADA = [
     "canada", "canadian", "ontario", "alberta", "british columbia",
-    "data breach", "privacy", "facebook", "google", "amazon", "apple",
-    "airline", "air canada", "westjet", "rogers", "bell", "telus",
-    "bank", "td bank", "rbc", "scotiabank", "bmo", "cibc",
-    "car", "toyota", "honda", "volkswagen", "ford",
+    "quebec", "saskatchewan", "manitoba", "nova scotia", "new brunswick",
+    "air canada", "westjet", "flair", "swoop",
+    "rogers", "bell canada", "telus", "shaw", "videotron",
+    "rbc", "td bank", "scotiabank", "bmo", "cibc", "national bank",
+    "tim hortons", "loblaws", "shoppers drug mart", "canadian tire",
+    "petro-canada", "suncor", "enbridge",
+    "cra", "canada revenue", "service canada",
+    "cad", "canadian dollar",
 ]
 
 
@@ -94,6 +100,6 @@ async def scrape_classaction_org(client: httpx.AsyncClient) -> list[dict]:
 
 
 def is_eligible(settlement: dict) -> bool:
-    """Rough eligibility filter — Canada-relevant or major tech/consumer brand."""
+    """Canada-only filter — must explicitly mention Canada or a Canadian company/province."""
     text = (settlement.get("title", "") + " " + settlement.get("excerpt", "")).lower()
-    return any(kw in text for kw in KEYWORDS_ELIGIBLE)
+    return any(kw in text for kw in KEYWORDS_CANADA)

@@ -16,7 +16,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-CHECK_INTERVAL = 6 * 3600  # every 6 hours
+CHECK_INTERVAL = 24 * 3600  # once per day is plenty for settlement updates
 
 
 async def alert(bot: Bot, msg: str):
