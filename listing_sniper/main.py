@@ -17,6 +17,7 @@ from listing_sniper.exchanges import (
 )
 from listing_sniper.models import Base, KnownPair, Position
 from listing_sniper.position_monitor import monitor_positions
+from listing_sniper.twitter_scanner import scan_twitter
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -118,7 +119,7 @@ async def handle_new_listing(exchange: str, pair: str, base: str, session, bot: 
             f"Tx: <code>{tx}</code>\n\n"
             f"🤖 Auto-sell armed:\n"
             f"  • Sell at: +30% (${BUY_AMOUNT_USD * 1.30:.0f})\n"
-            f"  • Stop loss: -15% (${BUY_AMOUNT_USD * 0.85:.0f})\n"
+            f"  • Stop loss: -10% (${BUY_AMOUNT_USD * 0.90:.0f})\n"
             f"  • Max hold: 72 hours\n"
             f"Checking every 5 minutes."
         )
@@ -179,7 +180,7 @@ async def run():
                     f"✅ <b>Listing Sniper ACTIVE</b>\n"
                     f"Baseline: <b>{count:,} pairs</b> across 4 exchanges.\n"
                     f"You will only hear from me when a genuinely new token lists.\n"
-                    f"Auto-sell armed at +30% / -15% stop."
+                    f"Auto-sell armed at +30% / -10% stop."
                 )
             else:
                 logger.info("Already seeded — monitoring for new listings only.")
@@ -187,10 +188,20 @@ async def run():
             session.close()
 
     async with httpx.AsyncClient() as client:
-        await asyncio.gather(
+        twitter_enabled = all(
+            os.environ.get(k) for k in [
+                "TWITTER_API_KEY", "TWITTER_API_KEY_SECRET",
+                "TWITTER_ACCESS_TOKEN", "TWITTER_ACCESS_TOKEN_SECRET",
+            ]
+        )
+        tasks = [
             scan_exchanges(Session, bot, client),
             monitor_positions(Session, bot),
-        )
+        ]
+        if twitter_enabled:
+            tasks.append(scan_twitter(Session, bot, client, handle_new_listing))
+            logger.info("Twitter listing scanner enabled")
+        await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":

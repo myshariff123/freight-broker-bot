@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bot Command Center</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:       #0d1117;
+  --surface:  #161b22;
+  --surface2: #21262d;
+  --border:   #30363d;
+  --text:     #e6edf3;
+  --muted:    #7d8590;
+  --green:    #3fb950;
+  --red:      #f85149;
+  --blue:     #58a6ff;
+  --yellow:   #d29922;
+  --purple:   #bc8cff;
+  --orange:   #ffa657;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* Header */
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-left{display:flex;align-items:center;gap:12px}
+.header-logo{font-size:22px;font-weight:700;letter-spacing:-0.5px}
+.header-logo span{color:var(--blue)}
+.live-badge{background:#1a3a1a;border:1px solid var(--green);color:var(--green);font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;display:flex;align-items:center;gap:5px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.header-right{color:var(--muted);font-size:12px}
+
+/* Tabs */
+.tabs{background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:0;overflow-x:auto;padding:0 16px}
+.tab-btn{background:none;border:none;color:var(--muted);padding:14px 18px;cursor:pointer;font-size:14px;font-weight:500;border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s,border-color .15s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* Layout */
+.container{padding:24px;max-width:1400px;margin:0 auto}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* Cards */
+.cards{display:grid;gap:16px;margin-bottom:24px}
+.cards-5{grid-template-columns:repeat(5,1fr)}
+.cards-4{grid-template-columns:repeat(4,1fr)}
+.cards-3{grid-template-columns:repeat(3,1fr)}
+.cards-2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:1100px){.cards-5{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.cards-5,.cards-4,.cards-3,.cards-2{grid-template-columns:1fr 1fr}}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 20px}
+.card-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:8px}
+.card-value{font-size:28px;font-weight:700;line-height:1.1}
+.card-sub{font-size:12px;color:var(--muted);margin-top:6px}
+.card-value.green{color:var(--green)}
+.card-value.red{color:var(--red)}
+.card-value.blue{color:var(--blue)}
+.card-value.yellow{color:var(--yellow)}
+.card-value.purple{color:var(--purple)}
+.card-value.orange{color:var(--orange)}
+
+/* Hero P&L */
+.hero-card{background:linear-gradient(135deg,#161b22,#1c2433);border:1px solid var(--border);border-radius:12px;padding:28px 32px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between}
+.hero-left .label{font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+.hero-pnl{font-size:48px;font-weight:800;line-height:1}
+.hero-pnl.positive{color:var(--green)}
+.hero-pnl.negative{color:var(--red)}
+.hero-pnl.neutral{color:var(--muted)}
+.hero-right{text-align:right}
+.hero-right .label{font-size:12px;color:var(--muted);margin-bottom:4px}
+.hero-stat{font-size:22px;font-weight:700}
+
+/* Section headings */
+.section-title{font-size:14px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px;margin-top:28px}
+.section-title:first-child{margin-top:0}
+
+/* Chart */
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:24px}
+.chart-card canvas{max-height:220px}
+
+/* Tables */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:24px}
+.table-header{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.table-header-title{font-weight:600;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{padding:10px 14px;text-align:left;color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid #1e242c;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface2)}
+.mono{font-family:"SFMono-Regular",Consolas,monospace;font-size:12px}
+
+/* Status badges */
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px}
+.badge-open{background:#1a2a3a;color:var(--blue);border:1px solid #1f3a56}
+.badge-sold{background:#1a3a1a;color:var(--green);border:1px solid #1a4a1a}
+.badge-stopped{background:#3a1a1a;color:var(--red);border:1px solid #4a1a1a}
+.badge-failed{background:#2a2a1a;color:var(--yellow);border:1px solid #3a3a1a}
+.badge-yes{background:#1a3a1a;color:var(--green)}
+.badge-no{background:var(--surface2);color:var(--muted)}
+
+/* Filter buttons */
+.filter-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.filter-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+.filter-btn:hover,.filter-btn.active{background:var(--blue);border-color:var(--blue);color:#fff}
+
+/* Bot health */
+.bot-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:24px}
+@media(max-width:700px){.bot-grid{grid-template-columns:1fr}}
+.bot-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 18px;display:flex;align-items:center;gap:14px}
+.bot-icon{font-size:24px;flex-shrink:0}
+.bot-info{flex:1}
+.bot-name{font-weight:600;font-size:14px;margin-bottom:2px}
+.bot-detail{font-size:12px;color:var(--muted)}
+.bot-status{font-size:12px;font-weight:600;white-space:nowrap}
+.status-ok{color:var(--green)}
+.status-warn{color:var(--yellow)}
+.status-dead{color:var(--red)}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.dot-ok{background:var(--green)}
+.dot-warn{background:var(--yellow)}
+.dot-dead{background:var(--red)}
+
+/* Wallet */
+.wallet-card{background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid #2a2a5a;border-radius:10px;padding:20px;margin-bottom:16px}
+.wallet-title{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px}
+.wallet-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e1e3a}
+.wallet-row:last-child{border-bottom:none}
+.wallet-label{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.wallet-amount{font-size:16px;font-weight:700}
+
+/* Activity feed */
+.activity-feed{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.activity-item{padding:12px 16px;border-bottom:1px solid #1e242c;display:flex;align-items:flex-start;gap:10px;font-size:13px}
+.activity-item:last-child{border-bottom:none}
+.activity-icon{flex-shrink:0;font-size:16px;margin-top:1px}
+.activity-text{flex:1}
+.activity-time{font-size:11px;color:var(--muted);white-space:nowrap;margin-top:2px}
+
+/* Sub-tabs */
+.sub-tabs{display:flex;gap:8px;margin-bottom:20px}
+.sub-tab{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 16px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);transition:all .15s}
+.sub-tab.active{background:var(--blue);border-color:var(--blue);color:#fff}
+
+/* Percentage colors */
+.pos{color:var(--green)}
+.neg{color:var(--red)}
+
+/* Empty state */
+.empty{text-align:center;padding:48px 24px;color:var(--muted)}
+.empty-icon{font-size:40px;margin-bottom:12px}
+.empty-text{font-size:14px}
+
+/* Spinner */
+.loading{text-align:center;padding:32px;color:var(--muted);font-size:14px}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">🤖 Bot <span>Command Center</span></div>
+    <div class="live-badge"><span class="live-dot"></span>LIVE</div>
+  </div>
+  <div class="header-right">Last refresh: <span id="last-refresh">—</span> &nbsp;·&nbsp; Auto-refresh every 30s</div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="overview" onclick="showTab('overview')">📊 Overview</button>
+  <button class="tab-btn" data-tab="positions" onclick="showTab('positions')">🎯 Positions</button>
+  <button class="tab-btn" data-tab="arb" onclick="showTab('arb')">🎰 Arb Ops</button>
+  <button class="tab-btn" data-tab="alerts" onclick="showTab('alerts')">🔔 Alerts</button>
+  <button class="tab-btn" data-tab="system" onclick="showTab('system')">⚙️ System</button>
+</div>
+
+<!-- ═══ OVERVIEW ═══════════════════════════════════════════════════════════ -->
+<div id="tab-overview" class="tab-content active">
+  <div class="container">
+
+    <div class="hero-card">
+      <div class="hero-left">
+        <div class="label">Total Realised P&amp;L</div>
+        <div class="hero-pnl neutral" id="hero-pnl">$0.00 USDC</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px" id="hero-sub">Loading...</div>
+      </div>
+      <div class="hero-right">
+        <div class="label">Win Rate</div>
+        <div class="hero-stat" id="hero-winrate">—</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px" id="hero-record">—</div>
+      </div>
+    </div>
+
+    <div class="section-title">Snapshot</div>
+    <div class="cards cards-5" id="overview-cards">
+      <div class="card"><div class="card-label">Total Trades</div><div class="card-value blue" id="ov-trades">—</div><div class="card-sub">all time</div></div>
+      <div class="card"><div class="card-label">Open Positions</div><div class="card-value orange" id="ov-open">—</div><div class="card-sub">listing sniper</div></div>
+      <div class="card"><div class="card-label">Arb Ops Found</div><div class="card-value purple" id="ov-arb">—</div><div class="card-sub" id="ov-arb-sub">best: —</div></div>
+      <div class="card"><div class="card-label">Products Tracked</div><div class="card-value yellow" id="ov-products">—</div><div class="card-sub">price glitch</div></div>
+      <div class="card"><div class="card-label">CA Settlements</div><div class="card-value green" id="ov-ca">—</div><div class="card-sub">Canada alerts</div></div>
+    </div>
+
+    <div class="section-title">Cumulative P&amp;L (Listing Sniper)</div>
+    <div class="chart-card">
+      <canvas id="pnl-chart"></canvas>
+      <div class="empty" id="chart-empty" style="display:none"><div class="empty-icon">📈</div><div class="empty-text">No closed trades yet — chart will appear after first sell.</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══ POSITIONS ══════════════════════════════════════════════════════════ -->
+<div id="tab-positions" class="tab-content">
+  <div class="container">
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="loadPositions('all',this)">All</button>
+      <button class="filter-btn" onclick="loadPositions('open',this)">🟢 Open</button>
+      <button class="filter-btn" onclick="loadPositions('sold',this)">✅ Sold (Profit)</button>
+      <button class="filter-btn" onclick="loadPositions('stopped',this)">🔴 Stop Loss</button>
+      <button class="filter-btn" onclick="loadPositions('failed',this)">⚠️ Failed</button>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <span class="table-header-title">Listing Sniper Positions</span>
+        <span id="pos-count" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="positions-body"><div class="loading">Loading...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ARB OPS ════════════════════════════════════════════════════════════ -->
+<div id="tab-arb" class="tab-content">
+  <div class="container">
+    <div class="section-title">Arbitrage Opportunities Found</div>
+    <div class="cards cards-3" id="arb-summary-cards">
+      <div class="card"><div class="card-label">Total Found</div><div class="card-value purple" id="arb-total">—</div><div class="card-sub">all time</div></div>
+      <div class="card"><div class="card-label">Best Margin</div><div class="card-value green" id="arb-best">—</div><div class="card-sub">% guaranteed profit</div></div>
+      <div class="card"><div class="card-label">Last Found</div><div class="card-value blue" id="arb-last">—</div><div class="card-sub" id="arb-last-detail">—</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <span class="table-header-title">Recent Opportunities</span>
+        <span style="font-size:12px;color:var(--muted)">Stakes shown per $100 bankroll</span>
+      </div>
+      <div id="arb-body"><div class="loading">Loading...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ALERTS ═════════════════════════════════════════════════════════════ -->
+<div id="tab-alerts" class="tab-content">
+  <div class="container">
+    <div class="sub-tabs">
+      <button class="sub-tab active" onclick="showAlertTab('glitch',this)">💸 Price Glitch</button>
+      <button class="sub-tab" onclick="showAlertTab('classaction',this)">⚖️ Class Action</button>
+    </div>
+
+    <div id="alert-glitch">
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-header-title">Price Glitch Tracker — Products with 60%+ Off Alert Zone</span>
+        </div>
+        <div id="glitch-body"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <div id="alert-classaction" style="display:none">
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-header-title">Class Action Settlements — Canada</span>
+        </div>
+        <div id="ca-body"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SYSTEM ═════════════════════════════════════════════════════════════ -->
+<div id="tab-system" class="tab-content">
+  <div class="container">
+    <div class="section-title">Bot Health</div>
+    <div class="bot-grid" id="bot-health">
+      <div class="loading">Loading...</div>
+    </div>
+
+    <div class="section-title">Polygon Wallet</div>
+    <div class="wallet-card" id="wallet-card">
+      <div class="wallet-title">💼 On-chain Balances</div>
+      <div class="loading">Loading...</div>
+    </div>
+
+    <div class="section-title">Quick Links</div>
+    <div class="cards cards-3">
+      <div class="card">
+        <div class="card-label">Uniswap V3 — Polygon</div>
+        <div style="margin-top:8px"><a href="https://app.uniswap.org/#/swap?chain=polygon" target="_blank">Open Uniswap →</a></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Polygon Explorer</div>
+        <div style="margin-top:8px"><a href="https://polygonscan.com" target="_blank">PolygonScan →</a></div>
+      </div>
+      <div class="card">
+        <div class="card-label">GitHub Repo</div>
+        <div style="margin-top:8px"><a href="https://github.com/myshariff123/freight-broker-bot" target="_blank">myshariff123/freight-broker-bot →</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentTab = 'overview';
+let pnlChart = null;
+let positionFilter = 'all';
+let alertSubTab = 'glitch';
+
+// ─── Tab switching ──────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  document.querySelector(`[data-tab="${name}"]`).classList.add('active');
+  currentTab = name;
+  loadTabData(name);
+}
+
+function showAlertTab(name, btn) {
+  document.getElementById('alert-glitch').style.display = name === 'glitch' ? '' : 'none';
+  document.getElementById('alert-classaction').style.display = name === 'classaction' ? '' : 'none';
+  document.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  alertSubTab = name;
+  if (name === 'glitch') loadGlitch();
+  else loadClassAction();
+}
+
+// ─── Fetch helper ────────────────────────────────────────────────────────────
+async function api(path) {
+  const r = await fetch(path);
+  return r.json();
+}
+
+// ─── Format helpers ──────────────────────────────────────────────────────────
+function fmtPnl(v) {
+  if (v == null) return '<span class="muted">—</span>';
+  const c = v > 0 ? 'pos' : v < 0 ? 'neg' : '';
+  const sign = v > 0 ? '+' : '';
+  return `<span class="${c}">${sign}$${v.toFixed(2)}</span>`;
+}
+function fmtPct(v) {
+  if (v == null) return '—';
+  const c = v > 0 ? 'pos' : v < 0 ? 'neg' : '';
+  const sign = v > 0 ? '+' : '';
+  return `<span class="${c}">${sign}${v.toFixed(1)}%</span>`;
+}
+function fmtStatus(s) {
+  const map = {
+    open: ['badge-open','🟢 Open'],
+    sold: ['badge-sold','✅ Sold'],
+    stopped: ['badge-stopped','🔴 Stopped'],
+    failed: ['badge-failed','⚠️ Failed'],
+  };
+  const [cls, label] = map[s] || ['badge-no', s];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('en-CA', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function fmtAge(h) {
+  if (h == null) return '—';
+  if (h < 1) return `${Math.round(h*60)}m`;
+  if (h < 48) return `${h.toFixed(1)}h`;
+  return `${(h/24).toFixed(1)}d`;
+}
+function fmtAddr(hash) {
+  if (!hash) return '—';
+  return `<a class="mono" href="https://polygonscan.com/tx/${hash}" target="_blank">${hash.slice(0,8)}…${hash.slice(-6)}</a>`;
+}
+
+// ─── Overview ────────────────────────────────────────────────────────────────
+async function loadOverview() {
+  const s = await api('/api/summary');
+  if (s.error) return;
+
+  const pnl = s.total_pnl || 0;
+  const hero = document.getElementById('hero-pnl');
+  hero.textContent = (pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(2) + ' USDC';
+  hero.className = 'hero-pnl ' + (pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : 'neutral');
+  document.getElementById('hero-sub').textContent = `${s.total_trades} total trades · ${s.open_positions} open`;
+  document.getElementById('hero-winrate').textContent = s.win_rate + '%';
+  document.getElementById('hero-record').textContent = `${s.wins}W / ${s.losses}L`;
+
+  document.getElementById('ov-trades').textContent = s.total_trades;
+  document.getElementById('ov-open').textContent = s.open_positions;
+  document.getElementById('ov-arb').textContent = s.arb_total;
+  document.getElementById('ov-arb-sub').textContent = `best: ${s.best_margin}%`;
+  document.getElementById('ov-products').textContent = s.products_tracked;
+  document.getElementById('ov-ca').textContent = s.ca_settlements;
+
+  await loadPnlChart();
+}
+
+async function loadPnlChart() {
+  const data = await api('/api/pnl-chart');
+  const canvas = document.getElementById('pnl-chart');
+  const emptyEl = document.getElementById('chart-empty');
+
+  if (!data.labels || data.labels.length === 0) {
+    canvas.style.display = 'none';
+    emptyEl.style.display = '';
+    return;
+  }
+  canvas.style.display = '';
+  emptyEl.style.display = 'none';
+
+  if (pnlChart) pnlChart.destroy();
+  pnlChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: data.labels,
+      datasets: [
+        {
+          label: 'Cumulative P&L ($)',
+          data: data.cumulative,
+          borderColor: '#3fb950',
+          backgroundColor: 'rgba(63,185,80,0.08)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+        },
+        {
+          label: 'Daily P&L ($)',
+          data: data.daily,
+          borderColor: '#58a6ff',
+          backgroundColor: 'rgba(88,166,255,0.08)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 2,
+          pointHoverRadius: 4,
+          borderDash: [4,3],
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: {intersect: false, mode: 'index'},
+      plugins: {legend: {labels: {color: '#7d8590', font: {size: 12}}}},
+      scales: {
+        x: {ticks: {color: '#7d8590', maxRotation: 0}, grid: {color: '#21262d'}},
+        y: {ticks: {color: '#7d8590', callback: v => '$' + v.toFixed(2)}, grid: {color: '#21262d'}},
+      },
+    }
+  });
+}
+
+// ─── Positions ───────────────────────────────────────────────────────────────
+async function loadPositions(filter, btn) {
+  if (filter) positionFilter = filter;
+  if (btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  const rows = await api(`/api/positions?status=${positionFilter}`);
+  document.getElementById('pos-count').textContent = Array.isArray(rows) ? `${rows.length} records` : '';
+  const el = document.getElementById('positions-body');
+  if (!Array.isArray(rows) || rows.length === 0) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🎯</div><div class="empty-text">No positions yet.</div></div>';
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>Token</th><th>Exchange</th><th>Pair</th>
+      <th>Buy</th><th>Sell</th><th>P&L</th><th>P&L %</th>
+      <th>Status</th><th>Age</th><th>Opened</th><th>Buy Tx</th>
+    </tr></thead>
+    <tbody>
+    ${rows.map(r => `<tr>
+      <td><strong>${r.token || '—'}</strong></td>
+      <td>${r.exchange || '—'}</td>
+      <td class="mono">${r.pair || '—'}</td>
+      <td>$${(r.buy_usdc||0).toFixed(2)}</td>
+      <td>${r.sell_usdc != null ? '$'+r.sell_usdc.toFixed(2) : '—'}</td>
+      <td>${fmtPnl(r.pnl_usdc)}</td>
+      <td>${fmtPct(r.pnl_pct)}</td>
+      <td>${fmtStatus(r.status)}</td>
+      <td>${fmtAge(r.age_hours)}</td>
+      <td style="white-space:nowrap">${fmtTime(r.opened_at)}</td>
+      <td>${fmtAddr(r.buy_tx)}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+// ─── Arb Ops ─────────────────────────────────────────────────────────────────
+async function loadArb() {
+  const rows = await api('/api/arb');
+  const s = await api('/api/summary');
+
+  document.getElementById('arb-total').textContent = s.arb_total || 0;
+  document.getElementById('arb-best').textContent = (s.best_margin || 0).toFixed(2) + '%';
+
+  if (Array.isArray(rows) && rows.length > 0) {
+    const last = rows[0];
+    document.getElementById('arb-last').textContent = last.margin_pct.toFixed(2) + '%';
+    document.getElementById('arb-last-detail').textContent = `${last.away_team} vs ${last.home_team}`;
+  }
+
+  const el = document.getElementById('arb-body');
+  if (!Array.isArray(rows) || rows.length === 0) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🎰</div><div class="empty-text">No arb opportunities found yet. Bot scans every 8 hours.</div></div>';
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>Sport</th><th>Match</th><th>Margin</th><th>Profit/$100</th>
+      <th>Best Stakes</th><th>Event Time</th><th>Found</th>
+    </tr></thead>
+    <tbody>
+    ${rows.map(r => {
+      const stakeStr = Object.entries(r.stakes || {})
+        .map(([out, info]) => `<span title="${info.book}">${out}: $${info.stake} @ ${info.odds}x</span>`)
+        .join('<br>');
+      return `<tr>
+        <td>${r.sport || '—'}</td>
+        <td><strong>${r.away_team}</strong><br><small style="color:var(--muted)">vs ${r.home_team}</small></td>
+        <td><span class="pos">${r.margin_pct.toFixed(2)}%</span></td>
+        <td><span class="pos">+$${r.profit_per_100.toFixed(2)}</span></td>
+        <td style="font-size:12px">${stakeStr || '—'}</td>
+        <td style="white-space:nowrap">${fmtTime(r.commence_time)}</td>
+        <td style="white-space:nowrap">${fmtTime(r.found_at)}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+// ─── Glitch alerts ───────────────────────────────────────────────────────────
+async function loadGlitch() {
+  const rows = await api('/api/alerts/glitch');
+  const el = document.getElementById('glitch-body');
+  if (!Array.isArray(rows) || rows.length === 0) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">💸</div><div class="empty-text">No products tracked yet. Data builds over the first few days.</div></div>';
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>Product</th><th>Source</th><th>Current</th><th>30-Day Avg</th><th>% Off</th><th>Alert Zone</th><th>Samples</th><th>Last Seen</th>
+    </tr></thead>
+    <tbody>
+    ${rows.map(r => `<tr>
+      <td><a href="${r.url}" target="_blank">${r.name.slice(0,60)}</a></td>
+      <td>${r.source}</td>
+      <td>$${r.current_price.toFixed(2)}</td>
+      <td>$${r.avg_price.toFixed(2)}</td>
+      <td>${fmtPct(r.pct_off)}</td>
+      <td>${r.is_glitch ? '<span class="badge badge-sold">🔥 GLITCH</span>' : '<span class="badge badge-no">Normal</span>'}</td>
+      <td>${r.samples}</td>
+      <td>${fmtTime(r.last_updated)}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+// ─── Class action ────────────────────────────────────────────────────────────
+async function loadClassAction() {
+  const rows = await api('/api/alerts/classaction');
+  const el = document.getElementById('ca-body');
+  if (!Array.isArray(rows) || rows.length === 0) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">⚖️</div><div class="empty-text">No Canadian settlements found yet.</div></div>';
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr><th>Settlement</th><th>Source</th><th>Posted</th><th>Alerted</th><th>First Seen</th></tr></thead>
+    <tbody>
+    ${rows.map(r => `<tr>
+      <td>
+        <a href="${r.url}" target="_blank"><strong>${(r.title||'').slice(0,70)}</strong></a>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">${(r.excerpt||'').slice(0,100)}…</div>
+      </td>
+      <td>${r.source}</td>
+      <td>${r.date_posted || '—'}</td>
+      <td>${r.alerted ? '<span class="badge badge-sold">Sent</span>' : '<span class="badge badge-no">Pending</span>'}</td>
+      <td style="white-space:nowrap">${fmtTime(r.first_seen)}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+// ─── System ──────────────────────────────────────────────────────────────────
+async function loadSystem() {
+  const sys = await api('/api/system');
+
+  // Bot health
+  const botEl = document.getElementById('bot-health');
+  if (sys.bots && sys.bots.length) {
+    botEl.innerHTML = sys.bots.map(b => {
+      const mins = b.last_seen ? parseInt(b.last_seen) : null;
+      const isOk = b.last_seen && !b.last_seen.includes('undefined');
+      const [dotClass, statusClass, statusText] = isOk
+        ? ['dot-ok', 'status-ok', b.last_seen]
+        : ['dot-dead', 'status-dead', 'No activity'];
+      return `<div class="bot-card">
+        <div class="bot-icon">${b.icon}</div>
+        <div class="bot-info">
+          <div class="bot-name">${b.name}</div>
+          <div class="bot-detail">${b.detail}</div>
+        </div>
+        <div class="bot-status ${statusClass}">
+          <span class="status-dot ${dotClass}"></span>${statusText}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Wallet
+  const w = sys.wallet || {};
+  const walletEl = document.getElementById('wallet-card');
+  if (w.error && !w.address) {
+    walletEl.innerHTML = `<div class="wallet-title">💼 On-chain Balances</div>
+      <div style="color:var(--muted);font-size:13px;padding:12px 0">Unable to fetch balances: ${w.error}</div>`;
+  } else {
+    walletEl.innerHTML = `
+      <div class="wallet-title">💼 Polygon Wallet — <span class="mono" style="font-size:11px">${w.address ? w.address.slice(0,10)+'…'+w.address.slice(-8) : '—'}</span></div>
+      <div class="wallet-row">
+        <div class="wallet-label">⛽ MATIC (gas)</div>
+        <div class="wallet-amount" style="color:${(w.matic||0) < 0.5 ? 'var(--red)' : 'var(--green)'}">${(w.matic||0).toFixed(4)} MATIC</div>
+      </div>
+      <div class="wallet-row">
+        <div class="wallet-label">💵 USDC (trading capital)</div>
+        <div class="wallet-amount" style="color:var(--blue)">$${(w.usdc||0).toFixed(2)} USDC</div>
+      </div>
+      ${(w.matic||0) < 0.5 ? '<div style="color:var(--red);font-size:12px;margin-top:10px">⚠️ Gas low — top up MATIC to keep bots running</div>' : ''}
+    `;
+  }
+}
+
+// ─── Main load ───────────────────────────────────────────────────────────────
+async function loadTabData(tab) {
+  switch (tab) {
+    case 'overview':  return loadOverview();
+    case 'positions': return loadPositions(null, null);
+    case 'arb':       return loadArb();
+    case 'alerts':    return alertSubTab === 'glitch' ? loadGlitch() : loadClassAction();
+    case 'system':    return loadSystem();
+  }
+}
+
+function updateRefresh() {
+  document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString('en-CA');
+}
+
+async function refresh() {
+  await loadTabData(currentTab);
+  updateRefresh();
+}
+
+// Initial load + auto-refresh
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>

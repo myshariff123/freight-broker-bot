@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from telegram import Bot
 
 from price_glitch.models import Base, PriceBaseline, PriceRecord
-from price_glitch.scraper import NEWEGG_QUERIES, WALMART_QUERIES, scrape_newegg, scrape_walmart_search
+from price_glitch.scraper import CANADACOMPUTERS_QUERIES, NEWEGG_QUERIES, scrape_canadacomputers, scrape_newegg
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -67,9 +67,9 @@ async def scan_and_alert(bot: Bot, session, client: httpx.AsyncClient):
         products += await scrape_newegg(client, url_path)
         await asyncio.sleep(2)
 
-    for query in WALMART_QUERIES:
-        products += await scrape_walmart_search(client, query)
-        await asyncio.sleep(1)
+    for cpath, cat in CANADACOMPUTERS_QUERIES:
+        products += await scrape_canadacomputers(client, cpath, cat)
+        await asyncio.sleep(2)
 
     logger.info(f"Scanned {len(products)} products")
 
@@ -123,7 +123,7 @@ async def run():
     Session = sessionmaker(bind=engine)
     bot = Bot(token=os.environ["TELEGRAM_BOT_TOKEN"])
 
-    logger.info(f"Price Glitch Monitor started — scanning {len(NEWEGG_QUERIES)} Newegg + {len(WALMART_QUERIES)} Walmart categories every {POLL_INTERVAL}s")
+    logger.info(f"Price Glitch Monitor started — scanning {len(NEWEGG_QUERIES)} Newegg + {len(CANADACOMPUTERS_QUERIES)} CanadaComputers categories every {POLL_INTERVAL}s")
 
     async with httpx.AsyncClient() as client:
         while True:

@@ -58,6 +58,21 @@ services:
     networks:
       - freight-net
 
+  bot-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot_dashboard
+    container_name: bot-dashboard
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - freight-net
+
   opportunities:
     build:
       context: .

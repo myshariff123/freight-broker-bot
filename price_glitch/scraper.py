@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 import httpx
@@ -13,7 +12,6 @@ HEADERS = {
 }
 
 NEWEGG_CATEGORIES = [
-    # (url_path, category_name)
     ("p/pl?d=laptop&N=4131&PageSize=96&Order=1", "Laptops"),
     ("p/pl?d=monitor&N=100007709&PageSize=96&Order=1", "Monitors"),
     ("p/pl?d=graphics+card&N=100007709&PageSize=96&Order=1", "GPUs"),
@@ -21,9 +19,17 @@ NEWEGG_CATEGORIES = [
     ("p/pl?d=gaming+keyboard&N=100007709&PageSize=96&Order=1", "Keyboards"),
 ]
 
+# CanadaComputers.com category cPaths
+CANADACOMPUTERS_CATEGORIES = [
+    ("43",  "Laptops"),
+    ("32",  "Monitors"),
+    ("585", "GPUs"),
+    ("1",   "SSDs"),
+    ("3",   "Desktops"),
+]
+
 
 async def scrape_newegg(client: httpx.AsyncClient, url_path: str) -> list[dict]:
-    """Scrape Newegg.ca using their embedded JSON product data."""
     try:
         resp = await client.get(
             f"https://www.newegg.ca/{url_path}",
@@ -34,20 +40,10 @@ async def scrape_newegg(client: httpx.AsyncClient, url_path: str) -> list[dict]:
         resp.raise_for_status()
         text = resp.text
 
-        # Newegg embeds product data as window.App.Items or similar patterns
-        # Each product item has ItemCell.FinalPrice and UnitCost
-        product_data_str = re.search(
-            r'"ProductNumber":"([A-Z0-9]+)"[^{}]*?"FinalPrice":([0-9.]+)[^{}]*?"Title":"([^"]+)"',
-            text,
-        )
-
-        # Extract all product records via broader regex
         raw_items = re.findall(
             r'"ProductNumber":"([A-Z0-9]+)"[^{}]*?"UnitCost":([0-9.]+),"FinalPrice":([0-9.]+)',
             text,
         )
-
-        # Also get titles by parsing the page structure
         soup = BeautifulSoup(text, "lxml")
         title_map: dict[str, str] = {}
         for link in soup.find_all("a", class_=re.compile(r"item-title|product-title", re.I)):
@@ -71,18 +67,16 @@ async def scrape_newegg(client: httpx.AsyncClient, url_path: str) -> list[dict]:
                 "source": "newegg",
             })
         return products
-
     except Exception as e:
         logger.warning(f"Newegg scrape failed [{url_path}]: {e}")
         return []
 
 
-async def scrape_walmart_search(client: httpx.AsyncClient, query: str) -> list[dict]:
-    """Walmart.ca search results via __NEXT_DATA__ JSON."""
+async def scrape_canadacomputers(client: httpx.AsyncClient, cpath: str, category_name: str) -> list[dict]:
     try:
         resp = await client.get(
-            "https://www.walmart.ca/search",
-            params={"q": query},
+            f"https://www.canadacomputers.com/index.php",
+            params={"cPath": cpath},
             headers=HEADERS,
             timeout=20,
             follow_redirects=True,
@@ -90,41 +84,79 @@ async def scrape_walmart_search(client: httpx.AsyncClient, query: str) -> list[d
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
 
-        script = soup.find("script", id="__NEXT_DATA__")
-        if not script:
-            return []
-
-        data = json.loads(script.string)
-        items_raw = (
-            data.get("props", {})
-            .get("pageProps", {})
-            .get("initialData", {})
-            .get("searchResult", {})
-            .get("itemStacks", [{}])[0]
-            .get("items", [])
+        products = []
+        # CC uses Bootstrap grid — each product card is a col div
+        items = (
+            soup.select("div.product-list-item")
+            or soup.select("div[class*='pq-product']")
+            or soup.select("div.col-6, div.col-sm-4")
         )
 
-        products = []
-        for item in items_raw[:48]:
-            price_info = item.get("priceInfo", {})
-            current = price_info.get("currentPrice", {}).get("price")
-            was = price_info.get("wasPrice", {}).get("price") or current
-            if not current:
+        for item in items:
+            # Title — try multiple selectors used across CC page versions
+            title_el = (
+                item.select_one("p.productTemplate_title a")
+                or item.select_one(".pq-hdr-product-title a")
+                or item.select_one("a[href*='pID']")
+                or item.select_one("a.a-unstyled")
+            )
+            if not title_el:
                 continue
+            name = title_el.get_text(strip=True)
+            if not name or len(name) < 5:
+                continue
+
+            href = title_el.get("href", "")
+            if href and not href.startswith("http"):
+                href = "https://www.canadacomputers.com/" + href.lstrip("/")
+            sku_m = re.search(r"pID=(\d+)", href)
+            sku = f"cc_{sku_m.group(1)}" if sku_m else f"cc_{abs(hash(name)) % 100000}"
+
+            # Sale / current price
+            sale_el = (
+                item.select_one("span.pq-product-sale-price")
+                or item.select_one("[class*='sale-price']")
+                or item.select_one("[class*='final-price']")
+                or item.select_one("[class*='pq-price']:not(del)")
+            )
+            # Regular / was price
+            reg_el = (
+                item.select_one("del.pq-product-regular-price")
+                or item.select_one("del")
+                or item.select_one("[class*='regular-price']")
+                or item.select_one("[class*='was-price']")
+            )
+
+            if not sale_el:
+                continue
+            sale_text = re.sub(r"[^0-9.]", "", sale_el.get_text())
+            reg_text = re.sub(r"[^0-9.]", "", reg_el.get_text()) if reg_el else ""
+
+            try:
+                current = float(sale_text) if sale_text else 0.0
+                regular = float(reg_text) if reg_text else current
+            except ValueError:
+                continue
+
+            if current <= 0:
+                continue
+
             products.append({
-                "sku": f"wm_{item.get('usItemId', item.get('id', ''))}",
-                "name": item.get("name", "Unknown")[:120],
-                "current_price": float(current),
-                "regular_price": float(was),
-                "url": f"https://www.walmart.ca{item.get('canonicalUrl', '')}",
-                "source": "walmart",
+                "sku": sku,
+                "name": name[:120],
+                "current_price": current,
+                "regular_price": max(regular, current),
+                "url": href or f"https://www.canadacomputers.com/index.php?cPath={cpath}",
+                "source": "canadacomputers",
             })
+
+        logger.debug(f"CanadaComputers [{category_name}]: {len(products)} products")
         return products
 
     except Exception as e:
-        logger.warning(f"Walmart scrape failed for '{query}': {e}")
+        logger.warning(f"CanadaComputers scrape failed [cPath={cpath}]: {e}")
         return []
 
 
 NEWEGG_QUERIES = NEWEGG_CATEGORIES
-WALMART_QUERIES = ["laptop", "tv 4k", "iphone", "tablet", "gaming console"]
+CANADACOMPUTERS_QUERIES = CANADACOMPUTERS_CATEGORIES
